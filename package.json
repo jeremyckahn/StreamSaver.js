@@ -1,6 +1,6 @@
 {
     "name": "@jeremyckahn/streamsaver",
-    "version": "2.0.6",
+    "version": "2.0.7",
     "description": "StreamSaver writes stream to the filesystem directly - asynchronous",
     "main": "StreamSaver.js",
     "scripts": {
@@ -24,10 +24,10 @@
         "url": "https://github.com/jimmywarting/StreamSaver.js/issues"
     },
     "homepage": "https://github.com/jimmywarting/StreamSaver.js#readme",
-	"funding": [
-      {
-        "type": "github",
-        "url": "https://github.com/sponsors/jimmywarting"
-      }
+    "funding": [
+        {
+            "type": "github",
+            "url": "https://github.com/sponsors/jimmywarting"
+        }
     ]
 }
