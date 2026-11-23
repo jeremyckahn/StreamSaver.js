@@ -80,6 +80,8 @@
     iframe.src = src
     iframe.loaded = false
     iframe.name = 'iframe'
+    // Do not leak the embedding page's URL to the mitm host.
+    iframe.referrerPolicy = 'no-referrer'
     iframe.isIframe = true
     iframe.postMessage = (...args) => iframe.contentWindow.postMessage(...args)
     iframe.addEventListener('load', () => {
