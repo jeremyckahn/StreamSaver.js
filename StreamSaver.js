@@ -34,6 +34,40 @@
   }
 
   /**
+   * The origin of the mitm page. Messages that carry the stream are posted
+   * only to this origin, so a mitm frame or popup that another document has
+   * navigated elsewhere never receives them. Read per call because callers
+   * may set `streamSaver.mitm` after this script loads.
+   *
+   * @return {string}
+   */
+  function getMitmOrigin () {
+    return new URL(streamSaver.mitm, location.href).origin
+  }
+
+  /**
+   * The mitm page's service worker replies with a download URL inside its own
+   * scope. Accept only that: an http(s) URL on the mitm origin. Anything else
+   * (javascript:, data:, blob:, another origin) would otherwise be loaded into
+   * an iframe of, or navigate, the calling document.
+   *
+   * @param  {*} value the `download` value the service worker sent
+   * @param  {string} mitmOrigin
+   * @return {boolean}
+   */
+  function isTrustedDownloadUrl (value, mitmOrigin) {
+    if (typeof value !== 'string') return false
+    let url
+    try {
+      url = new URL(value)
+    } catch (e) {
+      return false
+    }
+    return (url.protocol === 'https:' || url.protocol === 'http:') &&
+      url.origin === mitmOrigin
+  }
+
+  /**
    * create a hidden iframe and append it to the DOM (body)
    *
    * @param  {string} src page to load
@@ -156,8 +190,12 @@
     } else {
       opts = options || {}
     }
+    // Fixed when the stream is created, like the transporter.
+    let mitmOrigin = null
+
     if (!useBlobFallback) {
       loadTransporter()
+      mitmOrigin = getMitmOrigin()
 
       channel = new MessageChannel()
 
@@ -179,7 +217,9 @@
         response.headers['Content-Length'] = opts.size
       }
 
-      const args = [ response, '*', [ channel.port2 ] ]
+      // Never '*': that hands the port, and with it the stream, to whatever
+      // document the mitm frame or popup currently holds.
+      const args = [ response, mitmOrigin, [ channel.port2 ] ]
 
       if (supportsTransferable) {
         const transformer = downloadStrategy === 'iframe' ? undefined : {
@@ -215,6 +255,12 @@
       channel.port1.onmessage = evt => {
         // Service worker sent us a link that we should open.
         if (evt.data.download) {
+          // Never load or navigate to a URL outside the mitm origin.
+          if (!isTrustedDownloadUrl(evt.data.download, mitmOrigin)) {
+            console.error('[StreamSaver] Rejected untrusted download URL')
+            return
+          }
+
           // Special treatment for popup...
           if (downloadStrategy === 'navigate') {
             mitmTransporter.remove()
