@@ -46,16 +46,28 @@
   }
 
   /**
+   * The directory that holds the mitm page. Its service worker is registered
+   * with scope './', so every download URL it hands out lives under here.
+   *
+   * @return {string}
+   */
+  function getMitmScope () {
+    return new URL('./', new URL(streamSaver.mitm, location.href)).href
+  }
+
+  /**
    * The mitm page's service worker replies with a download URL inside its own
-   * scope. Accept only that: an http(s) URL on the mitm origin. Anything else
-   * (javascript:, data:, blob:, another origin) would otherwise be loaded into
-   * an iframe of, or navigate, the calling document.
+   * scope. Accept only that: an http(s) URL on the mitm origin, under the mitm
+   * page's directory. Anything else (javascript:, data:, blob:, another origin,
+   * another path on a shared origin such as a github.io user site) would
+   * otherwise be loaded into an iframe of, or navigate, the calling document.
    *
    * @param  {*} value the `download` value the service worker sent
    * @param  {string} mitmOrigin
+   * @param  {string} mitmScope
    * @return {boolean}
    */
-  function isTrustedDownloadUrl (value, mitmOrigin) {
+  function isTrustedDownloadUrl (value, mitmOrigin, mitmScope) {
     if (typeof value !== 'string') return false
     let url
     try {
@@ -63,8 +75,11 @@
     } catch (e) {
       return false
     }
+    // url.href is normalized, so dot segments (including %2e%2e) are already
+    // resolved and cannot climb out of the scope.
     return (url.protocol === 'https:' || url.protocol === 'http:') &&
-      url.origin === mitmOrigin
+      url.origin === mitmOrigin &&
+      url.href.startsWith(mitmScope)
   }
 
   /**
@@ -194,10 +209,12 @@
     }
     // Fixed when the stream is created, like the transporter.
     let mitmOrigin = null
+    let mitmScope = null
 
     if (!useBlobFallback) {
       loadTransporter()
       mitmOrigin = getMitmOrigin()
+      mitmScope = getMitmScope()
 
       channel = new MessageChannel()
 
@@ -257,8 +274,8 @@
       channel.port1.onmessage = evt => {
         // Service worker sent us a link that we should open.
         if (evt.data.download) {
-          // Never load or navigate to a URL outside the mitm origin.
-          if (!isTrustedDownloadUrl(evt.data.download, mitmOrigin)) {
+          // Never load or navigate to a URL outside the mitm page's scope.
+          if (!isTrustedDownloadUrl(evt.data.download, mitmOrigin, mitmScope)) {
             console.error('[StreamSaver] Rejected untrusted download URL')
             return
           }
